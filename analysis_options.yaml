@@ -1,0 +1,8 @@
+analyzer:
+  exclude:
+    - .dart_tool/**
+    - build/**
+    - ios/**
+    - android/**
+  errors:
+    unused_import: error

@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // UPDATED: Optimized based on your confirmation that custom claims are set.
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.admin == true) ||
+        // Fallback for the hardcoded UIDs just in case
+        (request.auth.uid in ['wdpGgDoUTgXsOXluvu0NAIRlktS2', 'vzAXwY46qHNpWZt0H203RZxq0mv1'])
+      );
+    }
+
+    // =========================
+    // THE MISSING FIX
+    // =========================
+    match /bugs/{bugId} {
+      // Allows admins to see/edit everything. 
+      // Allows any logged-in user to report a bug.
+      allow create: if isSignedIn(); 
+      allow read, update, delete: if isAdmin();
+    }
+
+    // =========================
+    // Existing Collections
+    // =========================
+
+    match /works/{workId} {
+      allow read: if (
+        (resource.data.currentStatus == 'published' && resource.data.isVisible == true)
+        || isAdmin()
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /discographyItems/{itemId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /performance_requests/{requestId} {
+      allow create: if true;
+      allow read: if resource.data.status == 'complete' || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /pages/{pageId} {
+      allow read: if pageId == 'bio' || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /bio_gallery/{photoId} {
+      allow read: if resource.data.visible == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /workCategories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    
+    match /messages/{messageId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+    
+    match /users/{userId} {
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+    
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

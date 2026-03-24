@@ -1,0 +1,30 @@
+{
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "moonlitely-entertainmen-xt654z",
+          "configurations": {
+            "web": "1:968802036417:web:1575bb5990601a03df0240"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      { "source": "/api/file", "function": "fileProxy" },
+      { "source": "**", "destination": "/index.html" }
+    ]
+  }
+}
