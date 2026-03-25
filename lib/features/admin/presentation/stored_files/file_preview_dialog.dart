@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:john_estacio_website/core/utils/link_proxy.dart';
+// import 'package:john_estacio_website/core/utils/link_proxy.dart';
 import 'package:john_estacio_website/core/utils/file_proxy.dart';
 import 'package:john_estacio_website/features/admin/presentation/stored_files/data/stored_files_repository.dart';
 import 'package:john_estacio_website/features/admin/presentation/stored_files/domain/stored_file_model.dart';
@@ -47,13 +47,17 @@ class _FilePreviewDialogState extends State<FilePreviewDialog> {
         widget.onTitleSaved?.call();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Title saved successfully'), backgroundColor: Colors.green),
+            const SnackBar(
+                content: Text('Title saved successfully'),
+                backgroundColor: Colors.green),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error saving title: $e'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text('Error saving title: $e'),
+                backgroundColor: Colors.red),
           );
         }
       }
@@ -63,14 +67,21 @@ class _FilePreviewDialogState extends State<FilePreviewDialog> {
   FileType _getFileType(String name) {
     final lowercasedName = name.toLowerCase();
     if (lowercasedName.endsWith('.pdf')) return FileType.pdf;
-    if (lowercasedName.endsWith('.mp3') || lowercasedName.endsWith('.wav') || lowercasedName.endsWith('.m4a')) return FileType.audio;
-    if (lowercasedName.endsWith('.jpg') || lowercasedName.endsWith('.jpeg') || lowercasedName.endsWith('.png') || lowercasedName.endsWith('.webp')) return FileType.image;
+    if (lowercasedName.endsWith('.mp3') ||
+        lowercasedName.endsWith('.wav') ||
+        lowercasedName.endsWith('.m4a')) return FileType.audio;
+    if (lowercasedName.endsWith('.jpg') ||
+        lowercasedName.endsWith('.jpeg') ||
+        lowercasedName.endsWith('.png') ||
+        lowercasedName.endsWith('.webp')) return FileType.image;
     return FileType.unknown;
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isEditable = _fileType == FileType.pdf || _fileType == FileType.audio || _fileType == FileType.image;
+    final bool isEditable = _fileType == FileType.pdf ||
+        _fileType == FileType.audio ||
+        _fileType == FileType.image;
 
     return Dialog(
       child: SizedBox(
@@ -88,14 +99,20 @@ class _FilePreviewDialogState extends State<FilePreviewDialog> {
                             controller: _titleController,
                             style: const TextStyle(color: AppTheme.darkGray),
                             decoration: InputDecoration(
-                              labelText: _fileType == FileType.pdf ? 'Document Title' : _fileType == FileType.audio ? 'Audio Clip Title' : 'Image Title',
-                              labelStyle: const TextStyle(color: AppTheme.primaryOrange),
+                              labelText: _fileType == FileType.pdf
+                                  ? 'Document Title'
+                                  : _fileType == FileType.audio
+                                      ? 'Audio Clip Title'
+                                      : 'Image Title',
+                              labelStyle: const TextStyle(
+                                  color: AppTheme.primaryOrange),
                               filled: true,
                               fillColor: AppTheme.white,
                               border: const OutlineInputBorder(),
                             ),
                           )
-                        : Text('File Preview', style: Theme.of(context).textTheme.headlineSmall),
+                        : Text('File Preview',
+                            style: Theme.of(context).textTheme.headlineSmall),
                   ),
                   if (isEditable) ...[
                     const SizedBox(width: 16),
@@ -103,7 +120,7 @@ class _FilePreviewDialogState extends State<FilePreviewDialog> {
                       onPressed: () async {
                         await _saveTitle();
                         if (mounted) {
-                           Navigator.of(context).pop();
+                          Navigator.of(context).pop();
                         }
                       },
                       child: const Text('Save Title'),
@@ -126,7 +143,8 @@ class _FilePreviewDialogState extends State<FilePreviewDialog> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (snapshot.hasError || !snapshot.hasData) {
-                    return const Center(child: Text('Could not load file URL.'));
+                    return const Center(
+                        child: Text('Could not load file URL.'));
                   }
                   final url = snapshot.data!;
                   return _buildPreviewWidget(url);
@@ -142,13 +160,15 @@ class _FilePreviewDialogState extends State<FilePreviewDialog> {
   Widget _buildPreviewWidget(String url) {
     switch (_fileType) {
       case FileType.image:
-        return InteractiveViewer(child: Image.network(url, fit: BoxFit.contain));
+        return InteractiveViewer(
+            child: Image.network(url, fit: BoxFit.contain));
       case FileType.pdf:
         return Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.picture_as_pdf, color: AppTheme.primaryOrange, size: 48),
+              const Icon(Icons.picture_as_pdf,
+                  color: AppTheme.primaryOrange, size: 48),
               const SizedBox(height: 12),
               const Text('PDFs open in a new browser tab.'),
               const SizedBox(height: 12),
@@ -166,7 +186,9 @@ class _FilePreviewDialogState extends State<FilePreviewDialog> {
       case FileType.audio:
         return AudioPreview(url: url);
       case FileType.unknown:
-        return Center(child: SelectableText('Preview is not available for this file type.\n\nURL: $url'));
+        return Center(
+            child: SelectableText(
+                'Preview is not available for this file type.\n\nURL: $url'));
     }
   }
 }

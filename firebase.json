@@ -22,9 +22,35 @@
       "**/.*",
       "**/node_modules/**"
     ],
+<<<<<<< HEAD
     "rewrites": [
       { "source": "/api/file", "function": "fileProxy" },
       { "source": "**", "destination": "/index.html" }
     ]
   }
 }
+=======
+    "headers": [
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/api/file",
+        "function": "fileProxy"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
+>>>>>>> first commit

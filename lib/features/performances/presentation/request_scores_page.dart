@@ -985,6 +985,68 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: 8),
+<<<<<<< HEAD
+=======
+            Autocomplete<String>(
+              initialValue: TextEditingValue(text: _timeZoneId.text.trim()),
+              optionsBuilder: (value) {
+                applySuggestedTimeZoneIfNeeded();
+                final q = value.text.trim().toLowerCase();
+                final suggestions = TimeZoneService.suggestTimeZoneIds(
+                  venueName: _venue.text,
+                  city: _city.text,
+                  region: _region.text,
+                  country: _country.text,
+                );
+                final base = <String>[...suggestions, ...tzIds];
+                if (q.isEmpty) return base.take(25);
+                return base.where((id) => id.toLowerCase().contains(q)).take(25);
+              },
+              onSelected: (v) {
+                setState(() {
+                  _tzManuallySet = true;
+                  _timeZoneId.text = v;
+                });
+              },
+              fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                controller.text = _timeZoneId.text;
+                controller.addListener(() {
+                  // Keep backing controller in sync for _buildItem()
+                  if (_timeZoneId.text != controller.text) {
+                    _timeZoneId.text = controller.text;
+                  }
+                });
+                return TextFormField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  decoration: const InputDecoration(
+                    labelText: 'Time Zone (IANA)',
+                    hintText: 'e.g. America/Edmonton',
+                    filled: true,
+                    fillColor: AppTheme.white,
+                    labelStyle: TextStyle(color: AppTheme.darkGray),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.lightGray),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.lightGray),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                    ),
+                  ),
+                  style: const TextStyle(color: AppTheme.darkGray),
+                  validator: (v) {
+                    final id = (v ?? '').trim();
+                    if (id.isEmpty) return 'Required';
+                    if (TimeZoneService.tryGetLocation(id) == null) return 'Unknown time zone';
+                    return null;
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+>>>>>>> first commit
             if (!isPhone)
               Row(
                 children: [
@@ -1191,6 +1253,7 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
               controller: _dateText,
               validator: (_) => _dateTime == null ? 'Please select date & time' : null,
             ),
+<<<<<<< HEAD
             const SizedBox(height: 8),
             Autocomplete<String>(
               initialValue: TextEditingValue(text: _timeZoneId.text.trim()),
@@ -1250,6 +1313,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                 );
               },
             ),
+=======
+>>>>>>> first commit
           ],
         ),
       ),
