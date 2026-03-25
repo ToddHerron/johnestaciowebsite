@@ -7,7 +7,8 @@ import 'package:john_estacio_website/features/performances/data/performances_rep
 import 'package:john_estacio_website/features/performances/domain/models/performance_models.dart';
 import 'package:john_estacio_website/core/utils/google_apps_script_mailer.dart';
 import 'package:john_estacio_website/features/works/data/works_repository.dart';
-import 'package:john_estacio_website/features/works/domain/models/work_model.dart' as wm;
+import 'package:john_estacio_website/features/works/domain/models/work_model.dart'
+    as wm;
 import 'package:john_estacio_website/theme.dart';
 import 'package:john_estacio_website/core/utils/title_normalizer.dart';
 
@@ -42,23 +43,25 @@ class _RequestScoresPageState extends State<RequestScoresPage> {
   final List<PerformanceItem> _performances = [];
   String? _preselectTitle; // from ?work=TITLE query param
 
+  static PerformanceItem _blankPerformance() => PerformanceItem(
+        venueName: '',
+        dateTime: Timestamp.fromMillisecondsSinceEpoch(0),
+        timeZoneId: '',
+        city: '',
+        region: '',
+        country: '',
+        ticketingLink: '',
+      );
+
+  void _ensureAtLeastOnePerformance() {
+    if (_performances.isEmpty) _performances.add(_blankPerformance());
+  }
+
   @override
   void initState() {
     super.initState();
     // Ensure there is one blank performance on initial presentation
-    if (_performances.isEmpty) {
-      _performances.add(
-        PerformanceItem(
-          venueName: '',
-          dateTime: Timestamp.fromMillisecondsSinceEpoch(0),
-          timeZoneId: '',
-          city: '',
-          region: '',
-          country: '',
-          ticketingLink: '',
-        ),
-      );
-    }
+    _ensureAtLeastOnePerformance();
     // Capture preselect work title from query param (resolved to an ID once works load)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final qp = GoRouterState.of(context).uri.queryParameters;
@@ -83,231 +86,239 @@ class _RequestScoresPageState extends State<RequestScoresPage> {
     super.dispose();
   }
 
-   Future<void> _submit() async {
-     if (_performances.isEmpty) {
-       ScaffoldMessenger.of(context).showSnackBar(
-         const SnackBar(content: Text('Add at least one performance.')),
-       );
-       return;
-     }
-     if (_formKey.currentState?.validate() != true) return;
+  Future<void> _submit() async {
+    if (_performances.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one performance.')),
+      );
+      return;
+    }
+    if (_formKey.currentState?.validate() != true) return;
 
-     final req = PerformanceRequest(
-       id: '',
-       // Persist plain titles for compatibility with existing queries and admin views
-       works: _selectedWorkKeys
-           .map((k) => k.split('|'))
-           .where((parts) => parts.length >= 2)
-           .map((parts) => parts[1].trim())
-           .toList(),
-       conductor: _conductor.text.trim(),
-       ensemble: _ensemble.text.trim(),
-       performances: _performances,
-       requester: RequesterInfo(
-         firstName: _firstName.text.trim(),
-         lastName: _lastName.text.trim(),
-         phone: _phone.text.trim(),
-         email: _email.text.trim(),
-         address: _address.text.trim(),
-         specialInstructions: _instructions.text.trim(),
-       ),
-        needBy: _needBy == null ? null : Timestamp.fromDate(DateTime(_needBy!.year, _needBy!.month, _needBy!.day)),
-       status: RequestStatus.newRequest,
-       createdAt: Timestamp.now(),
-     );
+    final req = PerformanceRequest(
+      id: '',
+      // Persist plain titles for compatibility with existing queries and admin views
+      works: _selectedWorkKeys
+          .map((k) => k.split('|'))
+          .where((parts) => parts.length >= 2)
+          .map((parts) => parts[1].trim())
+          .toList(),
+      conductor: _conductor.text.trim(),
+      ensemble: _ensemble.text.trim(),
+      performances: _performances,
+      requester: RequesterInfo(
+        firstName: _firstName.text.trim(),
+        lastName: _lastName.text.trim(),
+        phone: _phone.text.trim(),
+        email: _email.text.trim(),
+        address: _address.text.trim(),
+        specialInstructions: _instructions.text.trim(),
+      ),
+      needBy: _needBy == null
+          ? null
+          : Timestamp.fromDate(
+              DateTime(_needBy!.year, _needBy!.month, _needBy!.day)),
+      status: RequestStatus.newRequest,
+      createdAt: Timestamp.now(),
+    );
 
-     try {
-        await _repo.addRequest(req);
-        await _repo.addAdminMessageForRequest(req);
-        final sent = await _mailer.sendScoreRequestEmail(req);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: AppTheme.successGreen,
-              content: Text(
-                sent
-                    ? 'Request submitted. A confirmation receipt has been sent.'
-                    : 'Request submitted. Email confirmation could not be sent right now.',
-                style: const TextStyle(color: AppTheme.white),
+    try {
+      await _repo.addRequest(req);
+      await _repo.addAdminMessageForRequest(req);
+      final sent = await _mailer.sendScoreRequestEmail(req);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppTheme.successGreen,
+            content: Text(
+              sent
+                  ? 'Request submitted. A confirmation receipt has been sent.'
+                  : 'Request submitted. Email confirmation could not be sent right now.',
+              style: const TextStyle(color: AppTheme.white),
+            ),
+          ),
+        );
+        context.go('/performances/upcoming');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not submit request: $e')),
+        );
+      }
+    }
+  }
+
+  void _showRequestSummary() {
+    // Validate before showing summary
+    if (_formKey.currentState?.validate() != true) return;
+
+    String fmtDate(Timestamp ts) {
+      if (ts.millisecondsSinceEpoch == 0) return 'Not set';
+      final d = ts.toDate().toLocal();
+      return DateFormat("EEEE, MMMM dd, yyyy 'at' h:mm a").format(d);
+    }
+
+    List<Widget> bulletList(List<String> items) {
+      return items
+          .where((e) => e.trim().isNotEmpty)
+          .map((e) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• ',
+                        style: TextStyle(color: AppTheme.darkGray)),
+                    Expanded(
+                      child: Text(
+                        e,
+                        style: const TextStyle(color: AppTheme.darkGray),
+                      ),
+                    ),
+                  ],
+                ),
+              ))
+          .toList();
+    }
+
+    // Convert selected work keys to user-facing labels, always include subtitle when present
+    List<String> selectedWorks = _selectedWorkKeys
+        .map((k) => k.split('|'))
+        .where((parts) => parts.isNotEmpty)
+        .map((parts) {
+      final title = parts.length >= 2 ? parts[1].trim() : parts.first.trim();
+      final subtitle = parts.length >= 3 ? parts[2].trim() : '';
+      return subtitle.isNotEmpty ? '$title ($subtitle)' : title;
+    }).toList();
+    // Keep order as chosen; no special sorting required in the summary
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          backgroundColor: AppTheme.white,
+          title: const Text(
+            'Request Summary',
+            style: TextStyle(
+              color: AppTheme.darkGray,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: DefaultTextStyle(
+              style: const TextStyle(color: AppTheme.darkGray),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Selected Works
+                  const Text(
+                    'Selected Works',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  if (selectedWorks.isEmpty)
+                    const Text('No works selected')
+                  else
+                    ...bulletList(selectedWorks),
+                  const SizedBox(height: 12),
+
+                  // Performance Details (Ensemble/Conductor)
+                  const Text(
+                    'Performance Details',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  ...bulletList([
+                    if (_ensemble.text.trim().isNotEmpty)
+                      'Ensemble: ${_ensemble.text.trim()}',
+                    if (_conductor.text.trim().isNotEmpty)
+                      'Conductor: ${_conductor.text.trim()}',
+                  ]),
+                  const SizedBox(height: 6),
+
+                  // Performances block
+                  for (int i = 0; i < _performances.length; i++) ...[
+                    Text(
+                      'Performance ${i + 1}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    ...bulletList([
+                      'Date & Time: ${fmtDate(_performances[i].dateTime)}',
+                      if (_performances[i].venueName.trim().isNotEmpty)
+                        'Venue: ${_performances[i].venueName.trim()}',
+                      [
+                        _performances[i].city.trim(),
+                        _performances[i].region.trim(),
+                        _performances[i].country.trim(),
+                      ].where((e) => e.isNotEmpty).join(', ').isNotEmpty
+                          ? 'Location: ' +
+                              [
+                                _performances[i].city.trim(),
+                                _performances[i].region.trim(),
+                                _performances[i].country.trim(),
+                              ].where((e) => e.isNotEmpty).join(', ')
+                          : '',
+                      if (_performances[i].ticketingLink.trim().isNotEmpty)
+                        'Ticketing: ${_performances[i].ticketingLink.trim()}',
+                    ]),
+                    const SizedBox(height: 8),
+                  ],
+
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Requester Information',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  ...bulletList([
+                    'First Name: ${_firstName.text.trim()}',
+                    'Surname: ${_lastName.text.trim()}',
+                    'Phone Number: ${_phone.text.trim()}',
+                    'Email Address: ${_email.text.trim()}',
+                    'Courier Delivery Address: ${_address.text.trim()}',
+                    if (_instructions.text.trim().isNotEmpty)
+                      'Special instructions: ${_instructions.text.trim()}',
+                    if (_needBy != null)
+                      'Score needed by: ${DateFormat('EEEE, MMMM dd, yyyy').format(_needBy!)}',
+                  ]),
+                ],
               ),
             ),
-          );
-          context.go('/performances/upcoming');
-        }
-      } catch (e) {
-       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Could not submit request: $e')),
-         );
-       }
-     }
-   }
-
-   void _showRequestSummary() {
-     // Validate before showing summary
-     if (_formKey.currentState?.validate() != true) return;
-
-     String fmtDate(Timestamp ts) {
-       if (ts.millisecondsSinceEpoch == 0) return 'Not set';
-       final d = ts.toDate().toLocal();
-       return DateFormat("EEEE, MMMM dd, yyyy 'at' h:mm a").format(d);
-     }
-
-     List<Widget> bulletList(List<String> items) {
-       return items
-           .where((e) => e.trim().isNotEmpty)
-           .map((e) => Padding(
-                 padding: const EdgeInsets.only(bottom: 4),
-                 child: Row(
-                   crossAxisAlignment: CrossAxisAlignment.start,
-                   children: [
-                     const Text('• ', style: TextStyle(color: AppTheme.darkGray)),
-                     Expanded(
-                       child: Text(
-                         e,
-                         style: const TextStyle(color: AppTheme.darkGray),
-                       ),
-                     ),
-                   ],
-                 ),
-               ))
-           .toList();
-     }
-
-      // Convert selected work keys to user-facing labels, always include subtitle when present
-      List<String> selectedWorks = _selectedWorkKeys
-          .map((k) => k.split('|'))
-          .where((parts) => parts.isNotEmpty)
-          .map((parts) {
-            final title = parts.length >= 2 ? parts[1].trim() : parts.first.trim();
-            final subtitle = parts.length >= 3 ? parts[2].trim() : '';
-            return subtitle.isNotEmpty ? '$title ($subtitle)' : title;
-          })
-          .toList();
-     // Keep order as chosen; no special sorting required in the summary
-
-      showDialog(
-       context: context,
-       barrierDismissible: false,
-       builder: (dialogCtx) {
-         return AlertDialog(
-           backgroundColor: AppTheme.white,
-           title: const Text(
-             'Request Summary',
-             style: TextStyle(
-               color: AppTheme.darkGray,
-               fontWeight: FontWeight.bold,
-             ),
-           ),
-           content: SingleChildScrollView(
-             child: DefaultTextStyle(
-               style: const TextStyle(color: AppTheme.darkGray),
-               child: Column(
-                 crossAxisAlignment: CrossAxisAlignment.start,
-                 children: [
-                   // Selected Works
-                   const Text(
-                     'Selected Works',
-                     style: TextStyle(fontWeight: FontWeight.bold),
-                   ),
-                   const SizedBox(height: 6),
-                   if (selectedWorks.isEmpty)
-                     const Text('No works selected')
-                   else ...bulletList(selectedWorks),
-                   const SizedBox(height: 12),
-
-                   // Performance Details (Ensemble/Conductor)
-                   const Text(
-                     'Performance Details',
-                     style: TextStyle(fontWeight: FontWeight.bold),
-                   ),
-                   const SizedBox(height: 6),
-                   ...bulletList([
-                     if (_ensemble.text.trim().isNotEmpty)
-                       'Ensemble: ${_ensemble.text.trim()}',
-                     if (_conductor.text.trim().isNotEmpty)
-                       'Conductor: ${_conductor.text.trim()}',
-                   ]),
-                   const SizedBox(height: 6),
-
-                   // Performances block
-                   for (int i = 0; i < _performances.length; i++) ...[
-                     Text(
-                       'Performance ${i + 1}',
-                       style: const TextStyle(fontWeight: FontWeight.bold),
-                     ),
-                     const SizedBox(height: 4),
-                     ...bulletList([
-                       'Date & Time: ${fmtDate(_performances[i].dateTime)}',
-                       if (_performances[i].venueName.trim().isNotEmpty)
-                         'Venue: ${_performances[i].venueName.trim()}',
-                       [
-                         _performances[i].city.trim(),
-                         _performances[i].region.trim(),
-                         _performances[i].country.trim(),
-                       ].where((e) => e.isNotEmpty).join(', ').isNotEmpty
-                           ? 'Location: ' + [
-                               _performances[i].city.trim(),
-                               _performances[i].region.trim(),
-                               _performances[i].country.trim(),
-                             ].where((e) => e.isNotEmpty).join(', ')
-                           : '',
-                       if (_performances[i].ticketingLink.trim().isNotEmpty)
-                         'Ticketing: ${_performances[i].ticketingLink.trim()}',
-                     ]),
-                     const SizedBox(height: 8),
-                   ],
-
-                   const SizedBox(height: 12),
-                   const Text(
-                     'Requester Information',
-                     style: TextStyle(fontWeight: FontWeight.bold),
-                   ),
-                   const SizedBox(height: 6),
-                   ...bulletList([
-                     'First Name: ${_firstName.text.trim()}',
-                     'Surname: ${_lastName.text.trim()}',
-                     'Phone Number: ${_phone.text.trim()}',
-                     'Email Address: ${_email.text.trim()}',
-                     'Courier Delivery Address: ${_address.text.trim()}',
-                     if (_instructions.text.trim().isNotEmpty)
-                       'Special instructions: ${_instructions.text.trim()}',
-                      if (_needBy != null)
-                        'Score needed by: ${DateFormat('EEEE, MMMM dd, yyyy').format(_needBy!)}',
-                   ]),
-                 ],
-               ),
-             ),
-           ),
-           actions: [
-             TextButton(
-               onPressed: () => Navigator.of(dialogCtx).pop(),
-               child: const Text('Cancel'),
-             ),
-             ElevatedButton(
-               onPressed: () {
-                 Navigator.of(dialogCtx).pop();
-                 _submit();
-               },
-               style: ElevatedButton.styleFrom(
-                 backgroundColor: AppTheme.primaryOrange,
-                 foregroundColor: AppTheme.black,
-                 side: const BorderSide(color: AppTheme.black, width: 1),
-                 textStyle: const TextStyle(
-                   letterSpacing: 1.0,
-                   fontWeight: FontWeight.w600,
-                 ),
-               ),
-               child: const Text('SUBMIT REQUEST'),
-             ),
-           ],
-         );
-       },
-     );
-   }
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogCtx).pop();
+                _submit();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryOrange,
+                foregroundColor: AppTheme.black,
+                side: const BorderSide(color: AppTheme.black, width: 1),
+                textStyle: const TextStyle(
+                  letterSpacing: 1.0,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              child: const Text('SUBMIT REQUEST'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Guard against edge-cases where a user action might remove all items.
+    _ensureAtLeastOnePerformance();
+
     final isWide = MediaQuery.of(context).size.width > 900;
     return Scaffold(
       backgroundColor: AppTheme.black,
@@ -352,6 +363,14 @@ class _RequestScoresPageState extends State<RequestScoresPage> {
                                 // Performances before Select Works
                                 _PerformancesEditor(
                                   performances: _performances,
+                                  onAttemptRemoveLast: () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'At least one performance is required.'),
+                                      ),
+                                    );
+                                  },
                                   onChanged: () => setState(() {}),
                                 ),
                                 const SizedBox(height: 12),
@@ -391,14 +410,24 @@ class _RequestScoresPageState extends State<RequestScoresPage> {
                                   selectedDate: _needBy,
                                   onPick: () async {
                                     final themed = Theme.of(context).copyWith(
-                                      datePickerTheme: const DatePickerThemeData(
+                                      datePickerTheme:
+                                          const DatePickerThemeData(
                                         backgroundColor: AppTheme.darkGray,
-                                        headerBackgroundColor: AppTheme.primaryOrange,
+                                        headerBackgroundColor:
+                                            AppTheme.primaryOrange,
                                         headerForegroundColor: AppTheme.black,
-                                        dayForegroundColor: WidgetStatePropertyAll<Color>(AppTheme.white),
-                                        todayForegroundColor: WidgetStatePropertyAll<Color>(AppTheme.black),
-                                        todayBackgroundColor: WidgetStatePropertyAll<Color>(AppTheme.primaryOrange),
-                                        yearForegroundColor: WidgetStatePropertyAll<Color>(AppTheme.white),
+                                        dayForegroundColor:
+                                            WidgetStatePropertyAll<Color>(
+                                                AppTheme.white),
+                                        todayForegroundColor:
+                                            WidgetStatePropertyAll<Color>(
+                                                AppTheme.black),
+                                        todayBackgroundColor:
+                                            WidgetStatePropertyAll<Color>(
+                                                AppTheme.primaryOrange),
+                                        yearForegroundColor:
+                                            WidgetStatePropertyAll<Color>(
+                                                AppTheme.white),
                                       ),
                                     );
                                     final now = DateTime.now();
@@ -407,12 +436,16 @@ class _RequestScoresPageState extends State<RequestScoresPage> {
                                       firstDate: DateTime(now.year - 1),
                                       lastDate: DateTime(now.year + 5),
                                       initialDate: _needBy ?? now,
-                                      builder: (context, child) => Theme(data: themed, child: child!),
+                                      builder: (context, child) =>
+                                          Theme(data: themed, child: child!),
                                     );
                                     if (picked == null) return;
                                     setState(() {
-                                      _needBy = DateTime(picked.year, picked.month, picked.day);
-                                      _needByText.text = DateFormat('EEEE, MMMM dd, yyyy').format(_needBy!);
+                                      _needBy = DateTime(picked.year,
+                                          picked.month, picked.day);
+                                      _needByText.text =
+                                          DateFormat('EEEE, MMMM dd, yyyy')
+                                              .format(_needBy!);
                                     });
                                   },
                                   onClear: () {
@@ -421,7 +454,8 @@ class _RequestScoresPageState extends State<RequestScoresPage> {
                                       _needByText.text = '';
                                     });
                                   },
-                                  validator: (_) => _needBy == null ? 'Required' : null,
+                                  validator: (_) =>
+                                      _needBy == null ? 'Required' : null,
                                 ),
                                 const SizedBox(height: 12),
                                 _buildText(
@@ -438,6 +472,7 @@ class _RequestScoresPageState extends State<RequestScoresPage> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -451,7 +486,8 @@ class _RequestScoresPageState extends State<RequestScoresPage> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryOrange,
                           foregroundColor: AppTheme.black,
-                          side: const BorderSide(color: AppTheme.black, width: 1),
+                          side:
+                              const BorderSide(color: AppTheme.black, width: 1),
                           textStyle: const TextStyle(
                             letterSpacing: 1.0,
                             fontWeight: FontWeight.w600,
@@ -461,6 +497,7 @@ class _RequestScoresPageState extends State<RequestScoresPage> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -534,13 +571,15 @@ class _Section extends StatelessWidget {
 }
 
 class _TwoCol extends StatelessWidget {
-  const _TwoCol({required this.isWide, required this.left, required this.right});
+  const _TwoCol(
+      {required this.isWide, required this.left, required this.right});
   final bool isWide;
   final Widget left;
   final Widget right;
   @override
   Widget build(BuildContext context) {
-    if (!isWide) return Column(children: [left, const SizedBox(height: 12), right]);
+    if (!isWide)
+      return Column(children: [left, const SizedBox(height: 12), right]);
     return Row(children: [
       Expanded(child: left),
       const SizedBox(width: 12),
@@ -550,7 +589,12 @@ class _TwoCol extends StatelessWidget {
 }
 
 class _NeedByDateField extends StatelessWidget {
-  const _NeedByDateField({required this.controller, required this.selectedDate, required this.onPick, this.onClear, this.validator});
+  const _NeedByDateField(
+      {required this.controller,
+      required this.selectedDate,
+      required this.onPick,
+      this.onClear,
+      this.validator});
   final TextEditingController controller;
   final DateTime? selectedDate;
   final VoidCallback onPick;
@@ -623,7 +667,8 @@ class _WorksSelector extends StatelessWidget {
         StreamBuilder<List<wm.Work>>(
           stream: worksRepo.getWorksStream(),
           builder: (context, snapshot) {
-            final works = List<wm.Work>.from(snapshot.data ?? const <wm.Work>[]);
+            final works =
+                List<wm.Work>.from(snapshot.data ?? const <wm.Work>[]);
             if (works.isEmpty) {
               return const Text('No works available.');
             }
@@ -644,10 +689,10 @@ class _WorksSelector extends StatelessWidget {
 
             // Apply preselection by title once (choose first match), if provided and not already selected
             if (preselectTitle != null && preselectTitle!.trim().isNotEmpty) {
-                final alreadySelectedByTitle = selected.any((s) {
+              final alreadySelectedByTitle = selected.any((s) {
                 final parts = s.split('|');
                 final title = parts.length >= 2 ? parts[1].trim() : '';
-                  return sameTitle(title, preselectTitle!);
+                return sameTitle(title, preselectTitle!);
               });
               if (!alreadySelectedByTitle) {
                 final match = works.firstWhere(
@@ -668,19 +713,22 @@ class _WorksSelector extends StatelessWidget {
                 final hasDup = (titleCounts[normalizeTitle(title)] ?? 0) > 1;
                 final sub = (w.subtitle).trim();
                 // When duplicate titles exist, append subtitle in parentheses for disambiguation
-                final labelText = hasDup && sub.isNotEmpty ? '$title ($sub)' : title;
+                final labelText =
+                    hasDup && sub.isNotEmpty ? '$title ($sub)' : title;
                 return FilterChip(
                   label: Text(
                     labelText,
                     style: TextStyle(
-                      color: isSel ? AppTheme.primaryOrange : AppTheme.lightGray,
+                      color:
+                          isSel ? AppTheme.primaryOrange : AppTheme.lightGray,
                     ),
                   ),
                   showCheckmark: true,
                   checkmarkColor: AppTheme.primaryOrange,
                   shape: StadiumBorder(
                     side: BorderSide(
-                      color: isSel ? AppTheme.primaryOrange : AppTheme.lightGray,
+                      color:
+                          isSel ? AppTheme.primaryOrange : AppTheme.lightGray,
                     ),
                   ),
                   backgroundColor: AppTheme.darkGray,
@@ -709,9 +757,14 @@ class _WorksSelector extends StatelessWidget {
 }
 
 class _PerformancesEditor extends StatelessWidget {
-  const _PerformancesEditor({required this.performances, required this.onChanged});
+  const _PerformancesEditor({
+    required this.performances,
+    required this.onChanged,
+    required this.onAttemptRemoveLast,
+  });
   final List<PerformanceItem> performances;
   final VoidCallback onChanged;
+  final VoidCallback onAttemptRemoveLast;
 
   @override
   Widget build(BuildContext context) {
@@ -725,23 +778,26 @@ class _PerformancesEditor extends StatelessWidget {
         else
           Column(
             children: [
-              for (int i = 0; i < performances.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: _PerformanceFormCard(
-                    key: ValueKey('perf_form_$i'),
-                    initial: performances[i],
-                    canRemove: performances.length > 1,
-                    onChanged: (updated) {
-                      performances[i] = updated;
-                      onChanged();
-                    },
-                    onRemove: () {
-                      performances.removeAt(i);
-                      onChanged();
-                    },
-                  ),
+              for (int i = 0; i < performances.length; i++) ...[
+                _PerformanceFormCard(
+                  key: ValueKey('performance_$i'),
+                  initial: performances[i],
+                  canRemove: performances.length > 1,
+                  onChanged: (updated) {
+                    performances[i] = updated;
+                    onChanged();
+                  },
+                  onRemove: () {
+                    if (performances.length <= 1) {
+                      onAttemptRemoveLast();
+                      return;
+                    }
+                    performances.removeAt(i);
+                    onChanged();
+                  },
                 ),
+                const SizedBox(height: 12),
+              ],
             ],
           ),
         const SizedBox(height: 8),
@@ -751,6 +807,7 @@ class _PerformancesEditor extends StatelessWidget {
             TextButton.icon(
               style: TextButton.styleFrom(
                 side: const BorderSide(color: AppTheme.primaryOrange, width: 1),
+                foregroundColor: AppTheme.primaryOrange,
               ),
               onPressed: () {
                 // When adding, pre-populate with values from the last form (if any)
@@ -766,21 +823,26 @@ class _PerformancesEditor extends StatelessWidget {
                     ticketingLink: last.ticketingLink,
                   ));
                 } else {
-                  performances.add(PerformanceItem(
-                    venueName: '',
-                    dateTime: Timestamp.fromMillisecondsSinceEpoch(0),
-                    timeZoneId: '',
-                    city: '',
-                    region: '',
-                    country: '',
-                    ticketingLink: '',
-                  ));
+                  performances.add(
+                    PerformanceItem(
+                      venueName: '',
+                      dateTime: Timestamp.fromMillisecondsSinceEpoch(0),
+                      timeZoneId: '',
+                      city: '',
+                      region: '',
+                      country: '',
+                      ticketingLink: '',
+                    ),
+                  );
                 }
                 onChanged();
               },
-              icon: const Icon(Icons.add, color: AppTheme.darkGray),
-              label: const Text('+ Add Performance',
-                  style: TextStyle(color: AppTheme.primaryOrange)),
+              icon: const Icon(Icons.add, color: AppTheme.primaryOrange),
+              label: const Text(
+                'Add Another Performance',
+                style: TextStyle(
+                    color: AppTheme.primaryOrange, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -790,7 +852,12 @@ class _PerformancesEditor extends StatelessWidget {
 }
 
 class _PerformanceFormCard extends StatefulWidget {
-  const _PerformanceFormCard({super.key, required this.initial, required this.onChanged, required this.onRemove, this.canRemove = true});
+  const _PerformanceFormCard(
+      {super.key,
+      required this.initial,
+      required this.onChanged,
+      required this.onRemove,
+      this.canRemove = true});
   final PerformanceItem initial;
   final ValueChanged<PerformanceItem> onChanged;
   final VoidCallback onRemove;
@@ -824,8 +891,10 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
     final ms = widget.initial.dateTime.millisecondsSinceEpoch;
     _dateTime = ms == 0
         ? null
-        : TimeZoneService.toZonedLocal(widget.initial.dateTime.toDate().toUtc(), widget.initial.timeZoneId);
-    _dateText = TextEditingController(text: _dateTime == null ? '' : _dateLabel());
+        : TimeZoneService.toZonedLocal(widget.initial.dateTime.toDate().toUtc(),
+            widget.initial.timeZoneId);
+    _dateText =
+        TextEditingController(text: _dateTime == null ? '' : _dateLabel());
     _venue.addListener(_emit);
     _city.addListener(_emit);
     _region.addListener(_emit);
@@ -861,7 +930,9 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
     }
     return PerformanceItem(
       venueName: _venue.text.trim(),
-      dateTime: utc == null ? Timestamp.fromMillisecondsSinceEpoch(0) : Timestamp.fromDate(utc),
+      dateTime: utc == null
+          ? Timestamp.fromMillisecondsSinceEpoch(0)
+          : Timestamp.fromDate(utc),
       timeZoneId: tzId,
       city: _city.text.trim(),
       region: _region.text.trim(),
@@ -873,7 +944,7 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
   String _dateLabel() {
     if (_dateTime == null) return 'Pick Date & Time';
     return DateFormat("EEEE, MMMM dd, yyyy 'at' h:mm a").format(_dateTime!);
-    }
+  }
 
   Future<void> _pickDateTime() async {
     final themed = Theme.of(context).copyWith(
@@ -883,7 +954,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
         headerForegroundColor: AppTheme.black,
         dayForegroundColor: WidgetStatePropertyAll<Color>(AppTheme.white),
         todayForegroundColor: WidgetStatePropertyAll<Color>(AppTheme.black),
-        todayBackgroundColor: WidgetStatePropertyAll<Color>(AppTheme.primaryOrange),
+        todayBackgroundColor:
+            WidgetStatePropertyAll<Color>(AppTheme.primaryOrange),
         yearForegroundColor: WidgetStatePropertyAll<Color>(AppTheme.white),
       ),
       timePickerTheme: const TimePickerThemeData(
@@ -940,7 +1012,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
         country: _country.text,
       );
       if (suggestions.isEmpty) return;
-      if (_timeZoneId.text.trim().isEmpty || _timeZoneId.text.trim() != suggestions.first) {
+      if (_timeZoneId.text.trim().isEmpty ||
+          _timeZoneId.text.trim() != suggestions.first) {
         _timeZoneId.text = suggestions.first;
       }
     }
@@ -978,75 +1051,15 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                   borderSide: BorderSide(color: AppTheme.lightGray),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                  borderSide:
+                      BorderSide(color: AppTheme.primaryOrange, width: 2.0),
                 ),
               ),
               style: const TextStyle(color: AppTheme.darkGray),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: 8),
-<<<<<<< HEAD
-=======
-            Autocomplete<String>(
-              initialValue: TextEditingValue(text: _timeZoneId.text.trim()),
-              optionsBuilder: (value) {
-                applySuggestedTimeZoneIfNeeded();
-                final q = value.text.trim().toLowerCase();
-                final suggestions = TimeZoneService.suggestTimeZoneIds(
-                  venueName: _venue.text,
-                  city: _city.text,
-                  region: _region.text,
-                  country: _country.text,
-                );
-                final base = <String>[...suggestions, ...tzIds];
-                if (q.isEmpty) return base.take(25);
-                return base.where((id) => id.toLowerCase().contains(q)).take(25);
-              },
-              onSelected: (v) {
-                setState(() {
-                  _tzManuallySet = true;
-                  _timeZoneId.text = v;
-                });
-              },
-              fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
-                controller.text = _timeZoneId.text;
-                controller.addListener(() {
-                  // Keep backing controller in sync for _buildItem()
-                  if (_timeZoneId.text != controller.text) {
-                    _timeZoneId.text = controller.text;
-                  }
-                });
-                return TextFormField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  decoration: const InputDecoration(
-                    labelText: 'Time Zone (IANA)',
-                    hintText: 'e.g. America/Edmonton',
-                    filled: true,
-                    fillColor: AppTheme.white,
-                    labelStyle: TextStyle(color: AppTheme.darkGray),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: AppTheme.lightGray),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: AppTheme.lightGray),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
-                    ),
-                  ),
-                  style: const TextStyle(color: AppTheme.darkGray),
-                  validator: (v) {
-                    final id = (v ?? '').trim();
-                    if (id.isEmpty) return 'Required';
-                    if (TimeZoneService.tryGetLocation(id) == null) return 'Unknown time zone';
-                    return null;
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 8),
->>>>>>> first commit
             if (!isPhone)
               Row(
                 children: [
@@ -1065,7 +1078,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                           borderSide: BorderSide(color: AppTheme.lightGray),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                          borderSide: BorderSide(
+                              color: AppTheme.primaryOrange, width: 2.0),
                         ),
                       ),
                       style: const TextStyle(color: AppTheme.darkGray),
@@ -1088,7 +1102,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                           borderSide: BorderSide(color: AppTheme.lightGray),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                          borderSide: BorderSide(
+                              color: AppTheme.primaryOrange, width: 2.0),
                         ),
                       ),
                       style: const TextStyle(color: AppTheme.darkGray),
@@ -1111,7 +1126,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                           borderSide: BorderSide(color: AppTheme.lightGray),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                          borderSide: BorderSide(
+                              color: AppTheme.primaryOrange, width: 2.0),
                         ),
                       ),
                       style: const TextStyle(color: AppTheme.darkGray),
@@ -1137,7 +1153,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                         borderSide: BorderSide(color: AppTheme.lightGray),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                        borderSide: BorderSide(
+                            color: AppTheme.primaryOrange, width: 2.0),
                       ),
                     ),
                     style: const TextStyle(color: AppTheme.darkGray),
@@ -1158,7 +1175,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                         borderSide: BorderSide(color: AppTheme.lightGray),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                        borderSide: BorderSide(
+                            color: AppTheme.primaryOrange, width: 2.0),
                       ),
                     ),
                     style: const TextStyle(color: AppTheme.darkGray),
@@ -1179,7 +1197,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                         borderSide: BorderSide(color: AppTheme.lightGray),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                        borderSide: BorderSide(
+                            color: AppTheme.primaryOrange, width: 2.0),
                       ),
                     ),
                     style: const TextStyle(color: AppTheme.darkGray),
@@ -1202,7 +1221,8 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                   borderSide: BorderSide(color: AppTheme.lightGray),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                  borderSide:
+                      BorderSide(color: AppTheme.primaryOrange, width: 2.0),
                 ),
               ),
               style: const TextStyle(color: AppTheme.darkGray),
@@ -1224,14 +1244,16 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                   borderSide: BorderSide(color: AppTheme.lightGray),
                 ),
                 focusedBorder: const OutlineInputBorder(
-                  borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                  borderSide:
+                      BorderSide(color: AppTheme.primaryOrange, width: 2.0),
                 ),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
                       tooltip: 'Pick date & time',
-                      icon: const Icon(Icons.event, color: AppTheme.primaryOrange),
+                      icon: const Icon(Icons.event,
+                          color: AppTheme.primaryOrange),
                       onPressed: _pickDateTime,
                     ),
                     if (_dateTime != null)
@@ -1251,9 +1273,9 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
               ),
               style: const TextStyle(color: AppTheme.darkGray),
               controller: _dateText,
-              validator: (_) => _dateTime == null ? 'Please select date & time' : null,
+              validator: (_) =>
+                  _dateTime == null ? 'Please select date & time' : null,
             ),
-<<<<<<< HEAD
             const SizedBox(height: 8),
             Autocomplete<String>(
               initialValue: TextEditingValue(text: _timeZoneId.text.trim()),
@@ -1268,7 +1290,9 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                 );
                 final base = <String>[...suggestions, ...tzIds];
                 if (q.isEmpty) return base.take(25);
-                return base.where((id) => id.toLowerCase().contains(q)).take(25);
+                return base
+                    .where((id) => id.toLowerCase().contains(q))
+                    .take(25);
               },
               onSelected: (v) {
                 setState(() {
@@ -1288,8 +1312,9 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                   controller: controller,
                   focusNode: focusNode,
                   decoration: const InputDecoration(
-                    labelText: 'Time Zone (IANA)',
+                    labelText: 'Time Zone',
                     hintText: 'e.g. America/Edmonton',
+                    suffixIcon: Icon(Icons.search, color: AppTheme.lightGray),
                     filled: true,
                     fillColor: AppTheme.white,
                     labelStyle: TextStyle(color: AppTheme.darkGray),
@@ -1300,21 +1325,21 @@ class _PerformanceFormCardState extends State<_PerformanceFormCard> {
                       borderSide: BorderSide(color: AppTheme.lightGray),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: AppTheme.primaryOrange, width: 2.0),
+                      borderSide:
+                          BorderSide(color: AppTheme.primaryOrange, width: 2.0),
                     ),
                   ),
                   style: const TextStyle(color: AppTheme.darkGray),
                   validator: (v) {
                     final id = (v ?? '').trim();
                     if (id.isEmpty) return 'Required';
-                    if (TimeZoneService.tryGetLocation(id) == null) return 'Unknown time zone';
+                    if (TimeZoneService.tryGetLocation(id) == null)
+                      return 'Unknown time zone';
                     return null;
                   },
                 );
               },
             ),
-=======
->>>>>>> first commit
           ],
         ),
       ),
