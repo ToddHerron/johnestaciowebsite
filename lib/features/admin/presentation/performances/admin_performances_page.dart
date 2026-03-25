@@ -908,28 +908,20 @@ Future<PerformanceItem?> _showPerformanceDialog(BuildContext context, {Performan
                       timeZoneId = controller.text.trim();
                       if (controller.text.trim().isEmpty) tzManuallySet = false;
                     });
-                    return ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: controller,
-                      builder: (context, value, _) {
-                        final showSearchIcon = value.text.trim().isEmpty;
-                        return TextFormField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          decoration: _adminFieldDecoration(
-                            'Time Zone (IANA)',
-                            hint: 'e.g. America/Edmonton, Europe/London',
-                            suffixIcon: showSearchIcon
-                                ? const Icon(Icons.search, color: AppTheme.lightGray)
-                                : null,
-                          ),
-                          style: const TextStyle(color: AppTheme.darkGray),
-                          validator: (v) {
-                            final id = (v ?? '').trim();
-                            if (id.isEmpty) return 'Required (needed for DST-safe time)';
-                            if (TimeZoneService.tryGetLocation(id) == null) return 'Unknown time zone';
-                            return null;
-                          },
-                        );
+                    return TextFormField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      decoration: _adminFieldDecoration(
+                        'Time Zone',
+                        hint: 'e.g. America/Edmonton, Europe/London',
+                        suffixIcon: const Icon(Icons.search, color: AppTheme.lightGray),
+                      ),
+                      style: const TextStyle(color: AppTheme.darkGray),
+                      validator: (v) {
+                        final id = (v ?? '').trim();
+                        if (id.isEmpty) return 'Required (needed for DST-safe time)';
+                        if (TimeZoneService.tryGetLocation(id) == null) return 'Unknown time zone';
+                        return null;
                       },
                     );
                   },

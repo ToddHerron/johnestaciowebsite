@@ -22,14 +22,6 @@
       "**/.*",
       "**/node_modules/**"
     ],
-<<<<<<< HEAD
-    "rewrites": [
-      { "source": "/api/file", "function": "fileProxy" },
-      { "source": "**", "destination": "/index.html" }
-    ]
-  }
-}
-=======
     "headers": [
       {
         "source": "/index.html",
@@ -53,4 +45,3 @@
     ]
   }
 }
->>>>>>> first commit

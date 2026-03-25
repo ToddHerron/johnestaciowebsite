@@ -26,6 +26,7 @@
         "go_router",
         "google_fonts",
         "http",
+        "intl",
         "json_annotation",
         "just_audio",
         "pdfrx",
@@ -396,6 +397,15 @@
       "version": "0.10.1",
       "dependencies": [
         "http",
+        "path"
+      ]
+    },
+    {
+      "name": "intl",
+      "version": "0.20.2",
+      "dependencies": [
+        "clock",
+        "meta",
         "path"
       ]
     },
@@ -892,15 +902,6 @@
       "version": "1.1.0",
       "dependencies": [
         "flutter"
-      ]
-    },
-    {
-      "name": "intl",
-      "version": "0.20.2",
-      "dependencies": [
-        "clock",
-        "meta",
-        "path"
       ]
     },
     {
