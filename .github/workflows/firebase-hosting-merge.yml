@@ -22,12 +22,13 @@ jobs:
         run: flutter --version
 
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          flutter clean
 
-      # Reverting to --web-renderer which is the correct flag for 3.38.x
-      # If this fails, we will try the build without the flag to see default behavior
+      # Using the updated unified renderer flag for modern Flutter 3.x
       - name: Build Web (CanvasKit)
-        run: flutter build web --release --web-renderer canvaskit
+        run: flutter build web --release --renderer canvaskit
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
