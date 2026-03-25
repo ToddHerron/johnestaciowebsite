@@ -11,7 +11,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Flutter (Dreamflow version)
+      - name: Setup Flutter (to match Dreamflow version)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -26,9 +26,9 @@ jobs:
           flutter pub get
           flutter clean
 
-      # Using the updated unified renderer flag for modern Flutter 3.x
-      - name: Build Web (CanvasKit)
-        run: flutter build web --release --renderer canvaskit
+      # Using the most compatible flag for the 3.38.x branch
+      - name: Build Web
+        run: flutter build web --release --web-renderer canvaskit
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
